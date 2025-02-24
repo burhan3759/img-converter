@@ -142,7 +142,7 @@ def index():
                   body: formData
                 });
                 if (!response.ok) {
-                  console.log('error: 'response);
+                  console.log('error: ', response);
                   throw new Error("Server responded with status " + response.status);
                 }
                 const result = await response.json();
