@@ -6,11 +6,26 @@ import zipfile
 
 app = Flask(__name__)
 
+def remove_background(image):
+    """
+    If the image has transparency (an alpha channel), this function creates
+    a white background and composites the image over it.
+    """
+    if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
+        # Create a white background image of the same size as the original
+        background = Image.new("RGB", image.size, (255, 255, 255))
+        # Paste the image onto the background using its alpha channel as mask
+        background.paste(image, mask=image.split()[-1])
+        return background
+    else:
+        # No transparency: just convert to RGB (if needed)
+        return image.convert("RGB")
+
 @app.route('/')
 def index():
-    # HTML form for bulk image upload
+    # Simple HTML form for bulk uploading PNG files
     return '''
-    <h1>Bulk PNG to JPEG Converter</h1>
+    <h1>Bulk PNG to JPEG Converter (Background Removed)</h1>
     <form method="post" action="/convert" enctype="multipart/form-data">
         <input type="file" name="files" accept="image/png" multiple>
         <input type="submit" value="Convert">
@@ -19,8 +34,6 @@ def index():
 
 @app.route('/convert', methods=['POST'])
 def convert():
-    print('Enter converting PNG to JPEG function')
-    # Check if files were provided
     if 'files' not in request.files:
         return jsonify({'error': 'No files provided'}), 400
 
@@ -28,21 +41,19 @@ def convert():
     if not files:
         return jsonify({'error': 'No files selected'}), 400
 
-    # Create an in-memory ZIP archive
+    # Create an in-memory ZIP archive to store the converted images
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        print('start loop')
         for file in files:
             if file.filename == '':
-                continue  # Skip files with empty filenames
+                continue
 
             try:
-                # Open and convert the image
-                print('start conversion')
                 image = Image.open(file)
-                rgb_image = image.convert('RGB')
+                # Remove the background (if any)
+                image_no_bg = remove_background(image)
                 img_io = io.BytesIO()
-                rgb_image.save(img_io, format='JPEG', quality=95)
+                image_no_bg.save(img_io, format='JPEG', quality=95)
                 img_io.seek(0)
 
                 # Use the original file name (without extension) and add .jpg extension
@@ -50,18 +61,12 @@ def convert():
                 jpeg_filename = f"{base_name}.jpg"
                 
                 # Write the JPEG image to the ZIP archive
-                print('conversion success')
                 zip_file.writestr(jpeg_filename, img_io.read())
             except Exception as e:
-                # Log error for a file and continue with the next one
                 print(f"Error processing {file.filename}: {e}")
                 continue
 
-
-    print('start zip')
     zip_buffer.seek(0)
-    print('done zip')
-    print('enjoy')
     return send_file(
         zip_buffer,
         mimetype='application/zip',
