@@ -14,7 +14,7 @@ app = Flask(__name__)
 CORS(app)
 
 # Configuration for Google Drive API
-SERVICE_ACCOUNT_FILE = 'credentials/credentials.json'  # Path to your service account JSON
+SERVICE_ACCOUNT_FILE = '/credentials/credentials.json'  # Path to your service account JSON
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 def upload_to_drive(file_buffer, filename, folder_id):
