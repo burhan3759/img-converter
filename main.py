@@ -23,13 +23,102 @@ def remove_background(image):
 
 @app.route('/')
 def index():
-    # Simple HTML form for bulk uploading PNG files
     return '''
-    <h1>Bulk PNG to JPEG Converter (Background Removed)</h1>
-    <form method="post" action="/convert" enctype="multipart/form-data">
-        <input type="file" name="files" accept="image/png" multiple>
-        <input type="submit" value="Convert">
-    </form>
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8" />
+        <title>Bulk PNG to JPEG Converter</title>
+      </head>
+      <body>
+        <h1>Bulk PNG to JPEG Converter</h1>
+        <p>Select your PNG files. Files will be grouped into batches of less than 30MB each.</p>
+        <input type="file" id="fileInput" multiple accept="image/png" />
+        <button id="uploadBtn">Convert</button>
+        <div id="results"></div>
+    
+        <script>
+          const MAX_BATCH_SIZE = 30 * 1024 * 1024;
+    
+          function splitFilesIntoBatches(files) {
+            let batches = [];
+            let currentBatch = [];
+            let currentBatchSize = 0;
+            
+            for (let file of files) {
+              if (file.size > MAX_BATCH_SIZE) {
+                if (currentBatch.length > 0) {
+                  batches.push(currentBatch);
+                  currentBatch = [];
+                  currentBatchSize = 0;
+                }
+                batches.push([file]);
+              } else {
+                if (currentBatchSize + file.size > MAX_BATCH_SIZE) {
+                  batches.push(currentBatch);
+                  currentBatch = [file];
+                  currentBatchSize = file.size;
+                } else {
+                  currentBatch.push(file);
+                  currentBatchSize += file.size;
+                }
+              }
+            }
+            if (currentBatch.length > 0) {
+              batches.push(currentBatch);
+            }
+            return batches;
+          }
+    
+          async function uploadBatch(batch, index) {
+            const formData = new FormData();
+            for (let file of batch) {
+              formData.append('files', file);
+            }
+            try {
+              const response = await fetch('/convert', {
+                method: 'POST',
+                body: formData
+              });
+              if (!response.ok) {
+                throw new Error('Server responded with status ' + response.status);
+              }
+              const blob = await response.blob();
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `converted_batch_${index}.zip`;
+              link.textContent = `Download Batch ${index}`;
+              document.getElementById('results').appendChild(link);
+              document.getElementById('results').appendChild(document.createElement('br'));
+            } catch (error) {
+              console.error('Error uploading batch:', error);
+              const errorMsg = document.createElement('p');
+              errorMsg.textContent = `Error uploading batch ${index}: ${error}`;
+              document.getElementById('results').appendChild(errorMsg);
+            }
+          }
+    
+          document.getElementById('uploadBtn').addEventListener('click', async () => {
+            const input = document.getElementById('fileInput');
+            const files = input.files;
+            if (!files.length) {
+              alert('Please select at least one file.');
+              return;
+            }
+    
+            const batches = splitFilesIntoBatches(files);
+            document.getElementById('results').innerHTML = `<p>Uploading ${batches.length} batch(es)...</p>`;
+            
+            let index = 1;
+            for (let batch of batches) {
+              await uploadBatch(batch, index);
+              index++;
+            }
+          });
+        </script>
+      </body>
+    </html>
     '''
 
 @app.route('/convert', methods=['POST'])
