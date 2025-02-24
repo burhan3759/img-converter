@@ -1,4 +1,8 @@
 Flask==2.0.3
+Flask-Cors==3.0.10
 Pillow==9.0.1
 Werkzeug==2.2.2
 gunicorn==21.0.0
+google-api-python-client==2.70.0
+google-auth==2.16.0
+google-auth-httplib2==0.1.0
