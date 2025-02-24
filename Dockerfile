@@ -16,4 +16,4 @@ ENV PORT 8080
 
 # Use gunicorn to serve the Flask app.
 # Assumes your Flask app instance is defined as "app" in main.py.
-CMD exec gunicorn --bind :$PORT --workers 2 main:app
+CMD exec gunicorn --bind :$PORT --workers 5 main:app
