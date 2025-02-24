@@ -18,26 +18,18 @@ CORS(app)
 SERVICE_ACCOUNT_FILE = '/credentials/credentials.json'  # Path to your service account JSON
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
-def upload_to_drive(file_buffer, filename, folder_id, max_retries=3):
+def upload_to_drive(file_buffer, filename, folder_id, max_retries=5):
     """
-    Uploads a file to Google Drive in the specified folder using an exponential backoff retry strategy.
-    
-    Parameters:
-      - file_buffer: A file-like object containing the file data.
-      - filename: The desired name for the file in Drive.
-      - folder_id: The target Google Drive folder ID.
-      - max_retries: Maximum number of retries before failing.
-    
-    Returns:
-      The uploaded file's ID.
+    Uploads the file to Google Drive in the specified folder using resumable uploads.
+    Uses an exponential backoff strategy for retries.
+    Returns the uploaded file's ID.
     """
     attempt = 0
-    delay = 2  # initial delay in seconds
+    delay = 1  # initial delay in seconds
     while attempt < max_retries:
         try:
-            # Always reset the buffer position before each attempt.
+            # Reset buffer position before each attempt.
             file_buffer.seek(0)
-            # Build Drive service using service account credentials.
             credentials = service_account.Credentials.from_service_account_file(
                 SERVICE_ACCOUNT_FILE, scopes=SCOPES)
             drive_service = build('drive', 'v3', credentials=credentials)
@@ -46,15 +38,24 @@ def upload_to_drive(file_buffer, filename, folder_id, max_retries=3):
                 'name': filename,
                 'parents': [folder_id]
             }
-            media = MediaIoBaseUpload(file_buffer, mimetype='image/jpeg')
-            file = drive_service.files().create(
+            # Use resumable upload by setting resumable=True.
+            media = MediaIoBaseUpload(file_buffer, mimetype='image/jpeg', resumable=True)
+            request_drive = drive_service.files().create(
                 body=file_metadata, media_body=media, fields='id'
-            ).execute()
-            return file.get('id')
+            )
+            
+            response = None
+            # Upload in chunks until the entire file is uploaded.
+            while response is None:
+                status, response = request_drive.next_chunk()
+                if status:
+                    print("Upload progress: %d%%." % int(status.progress() * 100))
+            return response.get('id')
         except Exception as e:
             attempt += 1
             if attempt >= max_retries:
                 raise e
+            print(f"Upload failed (attempt {attempt}/{max_retries}). Retrying in {delay} seconds...")
             time.sleep(delay)
             delay *= 2  # Exponential backoff: double the delay
 
